@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>逐句跟读</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2f6b4f">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#f3f4f1; --card:#ffffff; --fg:#1d2420; --muted:#68736c; --line:#dde2dc;
+  --accent:#2f6b4f; --accent-soft:#e2efe7; --rec:#c2412d; --rec-soft:#f8e3de;
+  --serif:"Iowan Old Style","Charter","Georgia",serif;
+  --sans:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141816; --card:#1d2320; --fg:#e6ebe7; --muted:#97a39b; --line:#2c3430;
+  --accent:#7cc39f; --accent-soft:#22352b; --rec:#f07a64; --rec-soft:#3a2420; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 var(--sans)}
+.wrap{max-width:860px;margin:0 auto;padding:24px 16px 120px}
+h1{font:600 22px var(--sans);margin:0 0 4px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 18px}
+.bar{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0;border-bottom:1px solid var(--line);
+  display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+label{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center}
+select,input[type=number]{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg)}
+select{max-width:240px}
+button{font:inherit;font-size:13px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--fg);
+  padding:5px 10px;border-radius:6px}
+button:hover{border-color:var(--accent)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.primary{background:var(--accent);color:var(--card);border-color:var(--accent)}
+button.rec{color:var(--rec)}
+button.rec.on{background:var(--rec);color:#fff;border-color:var(--rec)}
+details{margin:14px 0}
+summary{cursor:pointer;color:var(--muted);font-size:13px}
+textarea{width:100%;min-height:200px;margin-top:8px;font:14px/1.5 var(--serif);padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg)}
+.list{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+.s{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:grid;grid-template-columns:28px 1fr;gap:4px 10px}
+.s.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.s.speaking .txt{background:var(--accent-soft)}
+.n{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;padding-top:3px}
+.txt{font:17px/1.55 var(--serif);cursor:pointer;border-radius:4px;min-width:0}
+.ctl{grid-column:2;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ctl .tag{font-size:12px;color:var(--muted)}
+.keys{color:var(--muted);font-size:12px;margin-top:6px}
+kbd{font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:4px;padding:0 4px;background:var(--card)}
+.warn{color:var(--rec);font-size:13px}
+.w{border-radius:3px;cursor:pointer}
+.w.hit{background:var(--accent-soft)}
+@media (hover:none){.keys{display:none}.ctl button{padding:7px 12px}}
+.w:hover{background:var(--accent-soft)}
+.w.g{border-bottom:1px dotted var(--accent)}
+#tip{position:fixed;z-index:20;max-width:300px;background:var(--fg);color:var(--bg);border-radius:8px;
+  padding:8px 10px;font:13px/1.5 var(--sans);box-shadow:0 6px 20px rgba(0,0,0,.18)}
+#tip b{font:600 15px var(--serif);margin-right:6px}
+#tip .src{opacity:.6;font-size:11px;margin-left:4px}
+.gen{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:14px 0 4px}
+#genMsg{font-size:13px;color:var(--muted)}
+#genMsg.err{color:var(--rec)}
+#meta{margin:12px 0 0}
+#meta h2{font:600 20px/1.35 var(--serif);margin:0 0 4px;text-wrap:balance}
+#meta .srcs{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 12px}
+#meta a{color:var(--accent)}
+input[type=password]{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);width:100%;max-width:420px}
+.hint{font-size:12px;color:var(--muted);margin:4px 0 0}
+#tip button{font-size:14px;padding:3px 10px;margin-left:6px;background:transparent;color:var(--bg);border-color:currentColor}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>逐句跟读</h1>
+  <p class="sub">点句子空白处朗读整句 · 点单词听发音并看释义 · 录音对比</p>
+
+  <div class="bar">
+    <label>声音 <select id="voice"></select></label>
+    <label>语速 <select id="rate">
+      <option value="0.7">0.7×</option><option value="0.8">0.8×</option><option value="0.9" selected>0.9×</option>
+      <option value="1">1.0×</option><option value="1.1">1.1×</option></select></label>
+    <label>每句重复 <input id="rep" type="number" min="1" max="10" value="1" style="width:48px"></label>
+    <label>跟读停顿 <select id="gap">
+      <option value="0">无（影子跟读）</option><option value="1.2" selected>句长×1.2</option><option value="2">句长×2</option></select></label>
+    <button id="playAll" class="primary">▶ 从当前句连续播放</button>
+    <button id="stop">■ 停止</button>
+  </div>
+  <div class="keys"><kbd>空格</kbd> 播放当前句 · <kbd>↑</kbd><kbd>↓</kbd> 上下句 · <kbd>R</kbd> 录音/停止 · <kbd>M</kbd> 听我的录音 · <kbd>C</kbd> 原音+我的对比 · <kbd>Esc</kbd> 停止</div>
+  <div id="msg" class="warn"></div>
+
+  <div class="gen">
+    <label>主题 <select id="topic">
+      <option value="the most important world news">综合要闻</option>
+      <option value="international affairs">国际</option>
+      <option value="United States news and politics">美国</option>
+      <option value="economics, markets and business">经济商业</option>
+      <option value="technology and AI">科技</option>
+      <option value="science, health and environment">科学健康环境</option>
+    </select></label>
+    <button id="gen" class="primary">✨ 一键生成新文章</button>
+    <span id="genMsg"></span>
+  </div>
+  <div id="meta" hidden></div>
+
+  <details id="keyBox">
+    <summary>生成文章设置（API Key）</summary>
+    <input id="key" type="password" placeholder="sk-ant-..." autocomplete="off">
+    <p class="hint">在 console.anthropic.com 创建。只保存在本机浏览器里，不会上传到别处。</p>
+  </details>
+
+  <details>
+    <summary>编辑文本（可粘贴任何英文文章）</summary>
+    <textarea id="src"></textarea>
+    <button id="apply" style="margin-top:6px">重新分句</button>
+  </details>
+
+  <div id="list" class="list"></div>
+</div>
+
+<script>
+const DEFAULT = `Bogs are rich in storied horror, and the wetlands of eastern England are no exception.
+
+The phantom lights of the will o' the wisp; the devil-dog Black Shuck lurking in the mist; strange rings where fairies dance, witchcraft rules, and only fools trespass — tales of the area are fraught with supernatural peril.
+
+Even today, the region's 1,500 square miles of wetlands, which stretch from the chill bite of the North Sea to the spires of Cambridge, are a lonely place once the sun sets. It is all too easy to find yourself submerged in fetid water, or sucked into a slurry of thick, black mud.
+
+The Fens, as they're called locally, are not alone. Similar wetlands are found across the globe, each with a name that has a subtly different meaning.
+
+Bogs and fens (bogs are more acidic) are formed in lake basins, created by glaciers receding during the last ice age, and are now filled with rotting and decayed plant matter called peat. This is often capped with sphagnum moss, making the ground soft and treacherous.
+
+Marshes, meanwhile, are flooded areas near rivers and coasts, the surface peppered with reeds and soft-stalked shrubs. Substitute these herbaceous plants for woody stumps and trees, and you have a swamp.
+
+Regardless of what they're called, these realms are a fertile ground for our ghostly folklore.
+
+Fog is one of the most formidable dangers in a bog.
+
+"If you have enough relative humidity — water in the air — you get condensation onto aerosol particles," says Nadine Borduas-Dedekind, an atmospheric chemist at the University of British Columbia, Canada. "If you went to the Arctic, you'd never see fog as there are very few particles in the air. But in a swamp, there's biogenic material and water spray."
+
+The main culprits for this fog are volatile organic compounds — small particles given off by plants that quickly evaporate. These, Borduas-Dedekind explains, oxidize in the air, forming larger molecules that can easily absorb water and form clouds.
+
+The time of day this happens is also key to a wetland's illusions.
+
+As the sun sets, the surface of the Earth cools. This makes the air denser and increases relative humidity, condensing more water vapor, and resulting in a phenomenon known as radiation fog.
+
+This type of thick, low-lying cloud typically appears late at night or just before dawn — exactly the moment our tired minds are likely to start seeing shapes in the dark.
+
+It's small wonder fiction's greatest detective, Sherlock Holmes, faced the savage Hound of the Baskervilles amid the nocturnal mists of a mire.
+
+Perhaps it's unsurprising, then, that another of the wetlands' supernatural foes also plays with our disquiet in the dark.
+
+Will o' the wisp — also known as ignis fatuus, jack-o'-lantern, or fool's light — are ghostly torches, said to lure travellers off the safe paths through the bogs and draw them into a sump from which they never return.
+
+Although accounts of these lights have vanished in modern times, stories of such ghost lights still permeate our culture, inspiring both the Dead Marshes of JRR Tolkien's Lord of the Rings, and the pumpkins we put out at Halloween.
+
+Numerous scientific explanations have been offered up for these lights. The most plausible is phosphine gas, created from the fermentation of plant matter inside the soil's low-oxygen environment.
+
+As chemists at the University of Pavia, Italy, observed in 2013, the phosphine bubbles up to the surface, where it encounters nitrogen and oxygen in the atmosphere, a reaction that triggers a faint glow known as chemiluminescence.
+
+This pale light is only visible in pitch darkness, explaining why it's no longer seen in our modern world filled with streetlights and distant homes.`;
+
+const $ = s => document.querySelector(s);
+const synth = window.speechSynthesis;
+let sents = [], cur = 0, recs = {}, durs = {}, voices = [];
+let runToken = 0, mediaRec = null, recIdx = -1, stream = null, audioEl = null;
+const LS = k => { try { return localStorage.getItem(k) } catch(e){ return null } };
+const LSset = (k,v) => { try { localStorage.setItem(k,v) } catch(e){} };
+
+function split(text){
+  const out = [];
+  text.split(/\n\s*\n|\n/).forEach(p => {
+    p = p.trim(); if(!p) return;
+    // split on . ! ? (optionally followed by quote) + space + uppercase/quote
+    const parts = p.match(/[^.!?]+(?:[.!?]+["”’']?|$)(?=\s+["“'A-Z(]|\s*$)/g) || [p];
+    let buf = '';
+    parts.forEach(x => {
+      buf += x;
+      const t = buf.trim();
+      // avoid splitting after short abbreviations
+      if (/\b(Mr|Mrs|Dr|St|vs|e\.g|i\.e)\.$/.test(t)) return;
+      if (t) out.push(t); buf = '';
+    });
+    if (buf.trim()) out.push(buf.trim());
+  });
+  return out;
+}
+
+// ===== 生词释义（按本文语境） =====
+const GLOSS = {
+bog:'n. 酸性泥炭沼泽',storied:'adj. 有名的；传说很多的',horror:'n. 恐怖',wetland:'n. 湿地',exception:'n. 例外',
+phantom:'adj. 幽灵般的，虚幻的',wisp:'n. 一缕；will o\' the wisp 鬼火',devil:'n. 魔鬼',lurk:'v. 潜伏，暗中埋伏',mist:'n. 薄雾',
+ring:'n. 圆圈（此处指“仙女环”）',fairy:'n. 仙子',witchcraft:'n. 巫术',fool:'n. 傻瓜',trespass:'v. 擅自闯入',tale:'n. 故事，传说',
+fraught:'adj. 充满（危险、忧虑等）的',supernatural:'adj. 超自然的',peril:'n. 危险',region:'n. 地区',stretch:'v. 延伸，绵延',
+chill:'n./adj. 寒冷（的）',bite:'n. 刺骨感；咬',spire:'n. 尖塔',lonely:'adj. 荒凉的；孤独的',submerge:'v. 淹没，沉没',
+fetid:'adj. 恶臭的',suck:'v. 吸入，卷入',slurry:'n. 泥浆',mud:'n. 泥',fen:'n. 碱性沼泽（芬斯地区称 the Fens）',
+locally:'adv. 在当地',globe:'n. 全球，地球',subtly:'adv. 微妙地',acidic:'adj. 酸性的',basin:'n. 盆地，洼地',
+glacier:'n. 冰川',recede:'v. 消退，后退',rot:'v. 腐烂',decay:'v. 腐烂，衰败',matter:'n. 物质',peat:'n. 泥炭',
+cap:'v. 覆盖（在顶部）',sphagnum:'n. 泥炭藓',moss:'n. 苔藓',treacherous:'adj. 暗藏危险的',marsh:'n. 草本沼泽',
+meanwhile:'adv. 与此同时；而',flood:'v. 淹没',coast:'n. 海岸',surface:'n. 表面',pepper:'v. 点缀，布满',reed:'n. 芦苇',
+stalk:'n. 茎，秆',shrub:'n. 灌木',substitute:'v. 替换（A for B：用 A 代替 B）',herbaceous:'adj. 草本的',woody:'adj. 木本的',
+stump:'n. 树桩',swamp:'n. 木本沼泽，沼泽地',regardless:'adv. 不管（regardless of 不论）',realm:'n. 领域；地带',
+fertile:'adj. 肥沃的；（喻）滋生……的',ghostly:'adj. 鬼魂的，幽灵般的',folklore:'n. 民间传说',fog:'n. 雾',
+formidable:'adj. 可怕的，难对付的',relative:'adj. 相对的（relative humidity 相对湿度）',humidity:'n. 湿度',
+condensation:'n. 凝结',onto:'prep. 到……上',aerosol:'n. 气溶胶',particle:'n. 颗粒，微粒',atmospheric:'adj. 大气的',
+chemist:'n. 化学家',arctic:'n. 北极',biogenic:'adj. 生物源的',spray:'n. 水雾，飞沫',culprit:'n. 罪魁祸首',
+volatile:'adj. 易挥发的',organic:'adj. 有机的',compound:'n. 化合物',give:'v. 给；give off 释放（气体、气味等）',
+evaporate:'v. 蒸发',oxidize:'v. 氧化',molecule:'n. 分子',absorb:'v. 吸收',illusion:'n. 幻觉，错觉',dense:'adj. 密集的，浓密的',
+vapor:'n. 水蒸气',phenomenon:'n. 现象',radiation:'n. 辐射（radiation fog 辐射雾）',lying:'adj. 位于……的（low-lying 低洼的）',
+typically:'adv. 通常',dawn:'n. 黎明',likely:'adj. 可能的（be likely to 很可能）',fiction:'n. 小说',detective:'n. 侦探',
+savage:'adj. 凶猛的',hound:'n. 猎犬',amid:'prep. 在……之中',nocturnal:'adj. 夜间的',mire:'n. 泥沼',
+unsurprising:'adj. 不足为奇的',foe:'n. 敌人',disquiet:'n. 不安，忧虑',play:'v. 玩；play with 玩弄，利用',
+ignis:'ignis fatuus 鬼火（拉丁语）',fatuus:'ignis fatuus 鬼火（拉丁语）',jack:'jack-o\'-lantern 鬼火；南瓜灯',lantern:'n. 灯笼',
+torch:'n. 火把',lure:'v. 引诱',traveller:'n. 旅行者',sump:'n. 污水坑，泥坑',account:'n. 记述，描述',vanish:'v. 消失',
+ghost:'n. 鬼魂',permeate:'v. 渗透，弥漫于',inspire:'v. 启发，激发',pumpkin:'n. 南瓜',put:'v. 放；put out 摆出来',
+numerous:'adj. 许多的',scientific:'adj. 科学的',explanation:'n. 解释',plausible:'adj. 似乎合理的，可信的',
+phosphine:'n. 磷化氢',gas:'n. 气体',fermentation:'n. 发酵',oxygen:'n. 氧气',environment:'n. 环境',observe:'v. 观察到',
+bubble:'v. 冒泡',encounter:'v. 遇到',nitrogen:'n. 氮气',atmosphere:'n. 大气',reaction:'n. 反应',trigger:'v. 引发',
+faint:'adj. 微弱的',glow:'n. 微光',chemiluminescence:'n. 化学发光',pale:'adj. 暗淡的，苍白的',visible:'adj. 可见的',
+pitch:'adj. 漆黑的（pitch darkness 一片漆黑）',darkness:'n. 黑暗',longer:'no longer 不再',streetlight:'n. 路灯',distant:'adj. 远处的',
+condense:'v. 凝结',increase:'v. 增加',result:'v. 导致（result in 造成）',key:'adj. 关键的',create:'v. 创造；形成',
+form:'v. 形成',cool:'v. 变凉',soil:'n. 土壤',low:'adj. 低的',dead:'adj. 死的（Dead Marshes 死亡沼泽，《指环王》地名）',
+culture:'n. 文化',modern:'adj. 现代的',minds:'n. 头脑',shape:'n. 形状，影子',greatest:'adj. 最伟大的',wonder:'n. 奇怪（small wonder 难怪）',
+given:'give 的过去分词；given off 释放出的',shuck:'Black Shuck 黑犬舒克（英国传说中的魔犬）',light:'n. 光，灯光',strange:'adj. 奇怪的',lake:'n. 湖',ground:'n. 地面；（喻）温床',danger:'n. 危险',draw:'v. 拖，引',safe:'adj. 安全的',path:'n. 小路',shape:'n. 形状，影子',rich:'adj. 富含……的（rich in）',eastern:'adj. 东部的',baskervilles:'Hound of the Baskervilles《巴斯克维尔的猎犬》',halloween:'n. 万圣节',tolkien:'J.R.R. 托尔金，《指环王》作者',lord:'Lord of the Rings《指环王》'
+};
+const STOP = new Set('a an the and or but of in on at to for from by with as is are was were be been it its it\'s this that these those they them their there here what which who whom whose when where why how all any each both only also very just not no so if then than too can could would should will may might must do does did have has had i you he she we our your his her my me us one two up out off into over under about after before through while once even still such more most other another same own s t'.split(' '));
+
+function lemma(w){
+  w = w.toLowerCase().replace(/[’']s$/,'').replace(/’/g,"'");
+  const tries = [w];
+  const add = x => x && tries.push(x);
+  if (/ies$/.test(w)) add(w.slice(0,-3)+'y');
+  if (/es$/.test(w)) add(w.slice(0,-2));
+  if (/s$/.test(w)) add(w.slice(0,-1));
+  if (/ied$/.test(w)) add(w.slice(0,-3)+'y');
+  if (/ed$/.test(w)){ const b=w.slice(0,-2); add(b); add(b+'e'); if(/(.)\1$/.test(b)) add(b.slice(0,-1)); }
+  if (/ing$/.test(w)){ const b=w.slice(0,-3); add(b); add(b+'e'); if(/(.)\1$/.test(b)) add(b.slice(0,-1)); }
+  if (/er$/.test(w)){ add(w.slice(0,-1)); add(w.slice(0,-2)); }
+  if (/ly$/.test(w)) add(w.slice(0,-2));
+  for (const t of tries) if (GLOSS[t]) return t;
+  return null;
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function wrapWords(t){
+  return t.split(/([A-Za-z]+(?:[’'][A-Za-z]+)?)/).map((p,i) => {
+    if (i%2===0) return esc(p);
+    const g = lemma(p);
+    if (!g && STOP.has(p.toLowerCase())) return esc(p);
+    return `<span class="w${g?' g':''}" data-w="${esc(p)}">${esc(p)}</span>`;
+  }).join('');
+}
+
+// 释义浮窗：本文生词用内置释义；其他词在线查询（需联网，机器翻译）
+const tip = document.createElement('div'); tip.id='tip'; tip.hidden=true; document.body.appendChild(tip);
+const mtCache = {}; let tipTimer=null, hideTimer=null, tipWord='';
+async function lookup(w){
+  const g = lemma(w); if (g) return {txt:GLOSS[g], src:''};
+  const k = w.toLowerCase(); if (mtCache[k]) return mtCache[k];
+  try{
+    const r = await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(k)+'&langpair=en|zh-CN');
+    const j = await r.json(); const txt = (j.responseData && j.responseData.translatedText) || '（未查到）';
+    return mtCache[k] = {txt, src:'机翻'};
+  }catch(e){ return {txt:'（未收录，联网后可查）', src:''}; }
+}
+function speakWord(w){ stopAll(); const u=new SpeechSynthesisUtterance(w); u.lang='en-US'; const v=voices[$('#voice').value]; if(v){u.voice=v;u.lang=v.lang;} u.rate=0.8; synth.speak(u); }
+function showTip(el){
+  const w = el.dataset.w; tipWord = w;
+  tip.innerHTML = `<b></b><span class="m">…</span><span class="src"></span><button type="button">🔊</button>`;
+  tip.querySelector('b').textContent = w;
+  tip.querySelector('button').onclick = e => { e.stopPropagation(); speakWord(w); };
+  const r = el.getBoundingClientRect(); tip.hidden=false;
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  tip.style.left = Math.max(8, Math.min(r.left, innerWidth - tw - 8)) + 'px';
+  tip.style.top = (r.top - th - 6 < 8 ? r.bottom + 6 : r.top - th - 6) + 'px';
+  lookup(w).then(res => { if (tipWord!==w) return;
+    tip.querySelector('.m').textContent = res.txt; tip.querySelector('.src').textContent = res.src;
+    const th2 = tip.offsetHeight; tip.style.top = (r.top - th2 - 6 < 8 ? r.bottom + 6 : r.top - th2 - 6) + 'px'; });
+}
+const canHover = matchMedia('(hover:hover)').matches;
+document.addEventListener('mouseover', e => { if (!canHover) return;
+  const el = e.target.closest && e.target.closest('.w');
+  if (e.target.closest && e.target.closest('#tip')){ clearTimeout(hideTimer); return; }
+  clearTimeout(tipTimer);
+  if (el){ clearTimeout(hideTimer); tipTimer = setTimeout(()=>showTip(el), 200); }
+  else { hideTimer = setTimeout(()=>{ tip.hidden=true; tipWord=''; }, 250); }
+});
+addEventListener('scroll', () => { tip.hidden = true; tipWord=''; }, {passive:true});
+document.addEventListener('click', e => { if (!e.target.closest('#tip') && !e.target.closest('.w')) { tip.hidden = true; tipWord=''; } });
+
+function render(){
+  const L = $('#list'); L.innerHTML = '';
+  sents.forEach((t,i) => {
+    const d = document.createElement('div'); d.className = 's'; d.id = 's'+i;
+    d.innerHTML = `<div class="n">${i+1}</div><div class="txt"></div>
+      <div class="ctl">
+        <button data-a="play">▶ 原音</button>
+        <button data-a="rec" class="rec">● 录音</button>
+        <button data-a="mine" ${recs[i]?'':'disabled'}>♪ 我的</button>
+        <button data-a="cmp" ${recs[i]?'':'disabled'}>⇄ 对比</button>
+        <span class="tag"></span>
+      </div>`;
+    d.querySelector('.txt').innerHTML = wrapWords(t);
+    d.querySelector('.txt').onclick = e => {
+      const w = e.target.closest('.w');
+      if (w){ e.stopPropagation(); speakWord(w.dataset.w); showTip(w);
+        w.classList.add('hit'); setTimeout(()=>w.classList.remove('hit'),400); return; }
+      select(i); stopAll(); speakOnce(i); };
+    d.querySelector('.ctl').onclick = e => {
+      const a = e.target.dataset.a; if(!a) return; select(i);
+      if (a==='play'){ stopAll(); speakOnce(i); }
+      if (a==='rec') toggleRec(i);
+      if (a==='mine'){ stopAll(); playMine(i); }
+      if (a==='cmp') compare(i);
+    };
+    L.appendChild(d);
+  });
+  select(Math.min(cur, sents.length-1));
+}
+
+function select(i, scroll){
+  document.querySelectorAll('.s.cur').forEach(e=>e.classList.remove('cur'));
+  cur = i; const el = $('#s'+i); if(!el) return;
+  el.classList.add('cur');
+  if (scroll) el.scrollIntoView({block:'center', behavior:'smooth'});
+}
+
+function loadVoices(){
+  // 只保留清晰自然的母语声音（Siri 同款 / 高质量声音），去掉机械和搞怪声音
+  const GOOD = /^(Nicky|Aaron|Samantha|Allison|Ava|Evan|Joelle|Nathan|Noelle|Susan|Tom|Zoe|Alex)\b/i;
+  voices = synth.getVoices().filter(v => /^en-US/i.test(v.lang.replace('_','-')) &&
+    (GOOD.test(v.name) || /premium|enhanced|natural|Google US English/i.test(v.name)));
+  const rank = v => (/^Nicky/i.test(v.name)?0:1) + (/premium|enhanced|natural/i.test(v.name)?-0.5:0) ;
+  if (!voices.length) voices = synth.getVoices().filter(v => /^en[-_]US/i.test(v.lang));
+  if (!voices.length) voices = synth.getVoices().filter(v => /^en/i.test(v.lang));
+  voices.sort((a,b)=>rank(a)-rank(b));
+  const sel = $('#voice'), saved = LS('voice');
+  sel.innerHTML = voices.map((v,i)=>`<option value="${i}">${v.name.replace(/\s*\(.*\)$/,'')}</option>`).join('');
+  const si = voices.findIndex(v=>v.name===saved);
+  if (si>=0) sel.value = si;
+  $('#msg').textContent = voices.length ? '' : '没有检测到英文语音。安卓：设置 → 系统 → 语言 → 文字转语音 → 首选引擎选 Google，并下载英语（美国）语音包；苹果：系统设置 → 辅助功能 → 朗读内容 中下载声音。然后刷新。';
+}
+$('#voice').onchange = () => LSset('voice', voices[$('#voice').value]?.name || '');
+
+function speak(i){
+  return new Promise(res => {
+    const u = new SpeechSynthesisUtterance(sents[i]); u.lang = 'en-US';
+    const v = voices[$('#voice').value]; if (v){ u.voice = v; u.lang = v.lang; }
+    u.rate = +$('#rate').value;
+    const el = $('#s'+i), t0 = performance.now();
+    u.onstart = () => el && el.classList.add('speaking');
+    u.onend = u.onerror = () => { el && el.classList.remove('speaking'); durs[i] = (performance.now()-t0)/1000; res(); };
+    synth.speak(u);
+  });
+}
+const wait = s => new Promise(r=>setTimeout(r, s*1000));
+
+async function speakOnce(i){ const tk = ++runToken; const n = Math.max(1, +$('#rep').value||1);
+  for (let k=0;k<n;k++){ if (tk!==runToken) return; await speak(i);
+    if (k<n-1){ await wait(Math.max(0.6,(durs[i]||2)*(+$('#gap').value||0.4))); } } }
+
+async function playAll(){
+  stopAll(); const tk = ++runToken;
+  const n = Math.max(1, +$('#rep').value||1), g = +$('#gap').value;
+  for (let i=cur;i<sents.length;i++){
+    select(i,true);
+    for (let k=0;k<n;k++){
+      if (tk!==runToken) return;
+      await speak(i);
+      if (tk!==runToken) return;
+      await wait(g ? (durs[i]||2)*g : 0.35);
+    }
+  }
+}
+
+function stopAll(){ runToken++; synth.cancel(); if (audioEl){ audioEl.pause(); audioEl=null; }
+  document.querySelectorAll('.speaking').forEach(e=>e.classList.remove('speaking')); }
+
+async function toggleRec(i){
+  if (mediaRec && mediaRec.state==='recording'){ mediaRec.stop(); return; }
+  stopAll();
+  try{
+    stream = stream || await navigator.mediaDevices.getUserMedia({audio:true});
+  }catch(e){ $('#msg').textContent = '无法使用麦克风：请在浏览器/应用权限里允许麦克风后重试。'; return; }
+  $('#msg').textContent = '';
+  const chunks = []; recIdx = i;
+  mediaRec = new MediaRecorder(stream);
+  mediaRec.ondataavailable = e => chunks.push(e.data);
+  mediaRec.onstop = () => {
+    if (recs[i]) URL.revokeObjectURL(recs[i]);
+    recs[i] = URL.createObjectURL(new Blob(chunks, {type: mediaRec.mimeType}));
+    const el = $('#s'+i);
+    el.querySelector('[data-a=rec]').classList.remove('on');
+    el.querySelector('[data-a=rec]').textContent = '● 重录';
+    el.querySelectorAll('[data-a=mine],[data-a=cmp]').forEach(b=>b.disabled=false);
+    el.querySelector('.tag').textContent = '已录音';
+    recIdx = -1;
+  };
+  mediaRec.start();
+  const b = $('#s'+i).querySelector('[data-a=rec]'); b.classList.add('on'); b.textContent = '■ 停止录音';
+}
+
+function playMine(i){ return new Promise(res => {
+  if (!recs[i]) return res();
+  audioEl = new Audio(recs[i]); audioEl.onended = audioEl.onerror = res; audioEl.play().catch(res);
+});}
+
+async function compare(i){ stopAll(); const tk = ++runToken;
+  await speak(i); if (tk!==runToken) return; await wait(0.4); if (tk!==runToken) return; await playMine(i); }
+
+$('#playAll').onclick = playAll;
+$('#stop').onclick = stopAll;
+$('#apply').onclick = () => { stopAll(); LSset('meta',''); showMeta(null); recs = {}; durs = {}; cur = 0; sents = split($('#src').value); LSset('text', $('#src').value); render(); };
+
+document.addEventListener('keydown', e => {
+  if (e.target.matches('textarea,input,select')) return;
+  const k = e.key.toLowerCase();
+  if (k===' '){ e.preventDefault(); stopAll(); speakOnce(cur); }
+  else if (k==='arrowdown'){ e.preventDefault(); select(Math.min(cur+1,sents.length-1),true); }
+  else if (k==='arrowup'){ e.preventDefault(); select(Math.max(cur-1,0),true); }
+  else if (k==='r') toggleRec(cur);
+  else if (k==='m'){ stopAll(); playMine(cur); }
+  else if (k==='c') compare(cur);
+  else if (k==='escape'){ stopAll(); if (mediaRec && mediaRec.state==='recording') mediaRec.stop(); }
+});
+
+// ===== 一键生成文章（Claude API + 联网检索） =====
+const SITES = ['bbc.com','apnews.com','npr.org','cnn.com','reuters.com','economist.com','bloomberg.com'];
+function showMeta(m){
+  const box = $('#meta');
+  if (!m || !m.title){ box.hidden = true; return; }
+  box.innerHTML = '<h2></h2><div class="srcs"></div>';
+  box.querySelector('h2').textContent = m.title;
+  const s = box.querySelector('.srcs');
+  (m.sources||[]).forEach(x => { if (!/^https?:\/\//.test(x.url||'')) return;
+    const a = document.createElement('a'); a.href = x.url; a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = (x.outlet ? x.outlet + '：' : '') + (x.title || x.url); s.appendChild(a); });
+  box.hidden = false;
+}
+function applyVocab(v){ if (v) for (const k in v) GLOSS[k.toLowerCase().trim()] = v[k]; }
+
+async function callClaude(key, messages){
+  const body = { model:'claude-sonnet-5-5', max_tokens:4000, messages,
+    tools:[{type:'web_search_20250305', name:'web_search', max_uses:4, allowed_domains:SITES}] };
+  const r = await fetch('https://api.anthropic.com/v1/messages', { method:'POST',
+    headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01',
+             'anthropic-dangerous-direct-browser-access':'true'},
+    body: JSON.stringify(body) });
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error((j.error && j.error.message) || ('HTTP ' + r.status));
+  return j;
+}
+
+async function genArticle(){
+  const msg = $('#genMsg'); msg.className = '';
+  const key = ($('#key').value || LS('apikey') || '').trim();
+  if (!key){ $('#keyBox').open = true; $('#key').focus(); msg.className='err'; msg.textContent = '请先填写 API Key'; return; }
+  LSset('apikey', key);
+  const btn = $('#gen'); btn.disabled = true; stopAll();
+  msg.textContent = '正在检索最新报道并撰写，约 30–90 秒…';
+  const today = new Date().toISOString().slice(0,10);
+  const prompt = `Today is ${today}. Search the web for the most important stories of the past few days on: ${$('#topic').value}. Use reporting from BBC News, AP, NPR, CNN, Reuters, The Economist and Bloomberg, cross-checking facts across at least two outlets.
+
+Pick ONE story (or a closely linked cluster) and write an ORIGINAL English news feature for an advanced English learner who practises shadowing (reading aloud after a native speaker).
+- Length: 380-450 words (2.5-3 minutes read aloud). 5-7 paragraphs.
+- Style: the clear, natural, idiomatic prose of BBC News and The Economist. Vary sentence length. Explain context a general reader needs. No bullet points, no headings inside the body.
+- Write entirely in your own words. Do not copy sentences from the sources; any direct quote must be under 10 words.
+- Facts must come from what you found; do not invent numbers or quotes.
+
+Then choose 15-25 words a CET-6 / IELTS 6.5 learner may not know. Keys are single lowercase base-form words (e.g. "tariff", "curb"); values are part of speech + concise Chinese meaning in this context (phrases can go in the value, e.g. "v. 抑制（curb inflation 抑制通胀）").
+
+Reply with ONLY this JSON, nothing else:
+{"title":"...","paragraphs":["...","..."],"vocab":{"word":"n. 中文"},"sources":[{"outlet":"BBC","title":"...","url":"https://..."}]}`;
+  try{
+    let messages = [{role:'user', content:prompt}], j, n = 0;
+    do { j = await callClaude(key, messages);
+         if (j.stop_reason === 'pause_turn') messages = [messages[0], {role:'assistant', content:j.content}];
+    } while (j.stop_reason === 'pause_turn' && ++n < 3);
+    const text = (j.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    const a = text.indexOf('{'), b = text.lastIndexOf('}');
+    if (a < 0 || b <= a) throw new Error('返回内容不是预期格式，请再试一次');
+    const art = JSON.parse(text.slice(a, b+1));
+    if (!art.paragraphs || !art.paragraphs.length) throw new Error('没有生成正文，请再试一次');
+    const body = art.paragraphs.join('\n\n');
+    const meta = {title:art.title, sources:art.sources||[], vocab:art.vocab||{}};
+    applyVocab(meta.vocab); LSset('meta', JSON.stringify(meta)); LSset('text', body);
+    $('#src').value = body; recs = {}; durs = {}; cur = 0; sents = split(body);
+    showMeta(meta); render(); window.scrollTo({top:0, behavior:'smooth'});
+    const words = body.split(/\s+/).length;
+    msg.textContent = `已生成 ${words} 词，约 ${Math.round(words/150*10)/10} 分钟`;
+  }catch(e){
+    msg.className = 'err';
+    msg.textContent = /fetch|network/i.test(e.message) ? '网络连接失败，请检查网络后重试' :
+      /authentication|api.key|x-api-key/i.test(e.message) ? 'API Key 无效，请检查后重新填写' :
+      /credit|balance|billing/i.test(e.message) ? 'API 账户余额不足，请到 console.anthropic.com 充值' : ('生成失败：' + e.message);
+  }finally{ btn.disabled = false; }
+}
+$('#gen').onclick = genArticle;
+$('#key').value = LS('apikey') || '';
+$('#key').onchange = () => LSset('apikey', $('#key').value.trim());
+try{ const m = JSON.parse(LS('meta') || 'null'); if (m){ applyVocab(m.vocab); showMeta(m); } }catch(e){}
+
+$('#src').value = LS('text') || DEFAULT;
+sents = split($('#src').value);
+render();
+loadVoices();
+if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = loadVoices;
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
